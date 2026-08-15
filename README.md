@@ -2,6 +2,12 @@
 
 Interactive indoor navigation platform with a map editor, turn-by-turn pathfinding, and room search for campuses and buildings.
 
+## Live demo
+
+**[chynstein.pythonanywhere.com](https://chynstein.pythonanywhere.com/)**
+
+The demo runs on example map data (the real campus maps aren't published). Personnel access (map viewing, search, and turn-by-turn navigation) requires no login; Admin editing access is login-gated and not published publicly.
+
 ## Features
 
 - **Map editor** — draw and edit floor plans on a tile-based canvas, with room/marker textboxes, door swing rendering, and per-floor map files
