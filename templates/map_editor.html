@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en" id="htmlRoot">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="GuidePost360 - Campus navigation system with interactive maps, turn-by-turn directions, and room finding.">
+    <title>Navigator - GuidePost360</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <!-- Preload critical resources for faster LCP -->
+    <link rel="preload" href="{{ url_for('static', filename='map_editor.css') }}?v=104" as="style">
+    <link rel="preload" href="{{ url_for('static', filename='guidepost_logo.svg') }}" as="image" fetchpriority="high">
+    <!-- Preload fonts to eliminate render-blocking chain -->
+    <link rel="preload" href="{{ url_for('static', filename='fonts/inter-400.woff2') }}" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="{{ url_for('static', filename='fonts/inter-600.woff2') }}" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="{{ url_for('static', filename='map_editor.css') }}?v=104">
+</head>
+<body class="role-{{ role|lower }}{% if role == 'Personnel' %} navigation-view{% endif %}">
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen" role="status" aria-live="polite" aria-label="Loading">
+        <div class="loading-content">
+            <div class="loading-spinner" aria-hidden="true">
+                <svg viewBox="0 0 100 100">
+                    <!-- Two curved arrows circling around clockwise -->
+                    <defs>
+                        <linearGradient id="arrowGradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#FC5A1E;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#FF8C00;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <!-- First arrow (top-right arc) with pointed end -->
+                    <path d="M 44 6 A 46 46 0 0 1 94 56 L 98 51 L 94 56 L 89 54"
+                          fill="none"
+                          stroke="url(#arrowGradient1)"
+                          stroke-width="5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"/>
+                    <!-- Second arrow (bottom-left arc) with pointed end -->
+                    <path d="M 56 94 A 46 46 0 0 1 6 44 L 2 49 L 6 44 L 11 46"
+                          fill="none"
+                          stroke="url(#arrowGradient1)"
+                          stroke-width="5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <img src="{{ url_for('static', filename='guidepost_logo.svg') }}" alt="GuidePost360 Logo" class="loading-logo" fetchpriority="high">
+            <span class="loading-text" data-i18n="common.loading">Loading...</span>
+        </div>
+    </div>
+
+    <!-- Skip Links for Accessibility -->
+    <a href="#mapCanvas" class="skip-link" data-i18n="a11y.skipToMap">Skip to map</a>
+    <a href="#routePanel" class="skip-link" data-i18n="a11y.skipToPathfinder">Skip to pathfinder</a>
+
+    <!-- Security: Warn on page refresh/reload but allow continuation -->
+    <script>
+        (function() {
+            // Detect page reload using Performance Navigation API
+            // Shows a warning but doesn't force logout (too aggressive for usability)
+            try {
+                var navigationType = null;
+
+                // Modern browsers: PerformanceNavigationTiming API
+                if (window.performance && performance.getEntriesByType) {
+                    var navEntries = performance.getEntriesByType('navigation');
+                    if (navEntries && navEntries.length > 0) {
+                        navigationType = navEntries[0].type;
+                    }
+                }
+
+                // Fallback for older browsers: deprecated performance.navigation
+                if (!navigationType && window.performance && performance.navigation) {
+                    // 0 = TYPE_NAVIGATE, 1 = TYPE_RELOAD, 2 = TYPE_BACK_FORWARD
+                    var navType = performance.navigation.type;
+                    if (navType === 1) navigationType = 'reload';
+                    else if (navType === 2) navigationType = 'back_forward';
+                }
+
+                // If page was reloaded, just log it (session is still valid via cookie)
+                // Back/forward navigation is allowed - user might want to go back
+                if (navigationType === 'reload') {
+                    console.info('Page was reloaded. Session preserved.');
+                }
+            } catch (e) {
+                // Silently ignore navigation detection errors
+            }
+        })();
+    </script>
+
+    <!-- User Info Bar -->
+    <div class="user-bar">
+        <div class="user-info">
+            <span class="role-badge role-{{ role|lower }}">{{ role }}</span>
+        </div>
+
+        <!-- Route Instructions (Center) - Hidden until route is active -->
+        <div id="routeInstructions" class="route-instructions" style="display: none;">
+            <span id="routeStep1" class="route-step"></span>
+            <span class="route-arrow">→</span>
+            <span id="routeStep2" class="route-step"></span>
+            <span id="routeStep3Container" style="display: none;">
+                <span class="route-arrow">→</span>
+                <span id="routeStep3" class="route-step"></span>
+            </span>
+        </div>
+
+        <div class="user-bar-right">
+            <!-- Reset Rotation Button -->
+            <button id="resetRotationBtn" class="reset-rotation-btn" onclick="resetRotation()" data-i18n-aria="editor.resetRotation" data-i18n-title="editor.resetRotationTitle" aria-label="Reset map rotation" title="Reset map rotation (A/D keys to rotate)">
+                <i data-lucide="rotate-ccw"></i> <span data-i18n="editor.resetRotation">Reset Rotation</span>
+            </button>
+            <!-- Theme Toggle Button -->
+            <button id="themeToggleBtn" class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle dark/light mode">
+                <i data-lucide="moon"></i> <span class="theme-label">Dark</span>
+            </button>
+            <!-- Language Toggle Button -->
+            <button class="lang-toggle-btn" onclick="toggleLanguage()" aria-label="Cambiar a español" title="Español">ES</button>
+            <!-- Mobile Menu Button (visible on mobile for admin/teacher) -->
+            <button id="mobileMenuBtn" class="mobile-menu-btn" onclick="toggleControlPanel()" data-i18n-aria="a11y.openControlPanel" aria-label="Open control panel menu" aria-expanded="false" aria-controls="controlPanel"><i data-lucide="menu"></i></button>
+            <button onclick="logout()" class="btn-logout" data-i18n="editor.logout">Logout</button>
+        </div>
+    </div>
+
+    <!-- Panel Overlay (for mobile drawer) -->
+    <div id="panelOverlay" class="panel-overlay" onclick="toggleControlPanel()"></div>
+
+    <!-- Landscape Pathfinder Tab - Outside canvas container to avoid overflow clipping -->
+    <div id="routePanelTab" class="route-panel-tab" onclick="toggleRoutePanel()" role="button" tabindex="0" aria-label="Toggle pathfinder panel" aria-expanded="false" aria-controls="routePanel" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRoutePanel();}">
+        <span class="tab-icon" aria-hidden="true"><i data-lucide="compass"></i></span>
+        <span class="tab-text" data-i18n="editor.pathfinder">Pathfinder</span>
+    </div>
+
+    <!-- Map Canvas Container -->
+    <main class="canvas-container" role="main">
+        <canvas id="mapCanvas" role="img" data-i18n-aria="a11y.mapAriaLabel" aria-label="Interactive campus map. Use the pathfinder panel to search for rooms and get directions."></canvas>
+
+        <!-- Location Dropdown (Visible in Student View) - populated dynamically from /api/available-maps -->
+        <div id="locationDropdown" class="location-dropdown">
+            <button id="locationBtn" class="location-btn" onclick="toggleLocationMenu()">
+                <span id="currentLocationName" data-i18n="location.loading">Loading...</span>
+                <span class="dropdown-arrow">▼</span>
+            </button>
+            <div id="locationMenu" class="location-menu">
+                <!-- Options populated dynamically by initializeAvailableMaps() -->
+            </div>
+        </div>
+
+        <!-- View Toggle Button (Admin only) -->
+        {% if role != 'Personnel' %}
+        <button id="viewToggleBtn" class="view-toggle-btn" onclick="toggleView()">
+            <i data-lucide="smartphone"></i> <span data-i18n="editor.switchToNav">Switch to Navigation View</span>
+        </button>
+        {% endif %}
+
+        <!-- Location Info Popup (Student View - Google Maps style) -->
+        <div id="locationPopup" class="location-popup" role="dialog" aria-labelledby="locationPopupName">
+            <div class="location-popup-header">
+                <span id="locationPopupName" class="location-popup-name"></span>
+                <button class="location-popup-close" onclick="hideLocationPopup()" data-i18n-aria="a11y.closeLocationDetails" aria-label="Close location details">&times;</button>
+            </div>
+            <div id="locationPopupDetails" class="location-popup-details">
+                <!-- Room number and floor info populated by JS -->
+            </div>
+            <div id="locationPopupDescription" class="location-popup-description">
+                <!-- Future: descriptions and pictures -->
+            </div>
+            <!-- Floor switch button for stairs/elevator - hidden by default -->
+            <div id="locationPopupFloorSwitch" class="location-popup-floor-switch" style="display: none;">
+                <button id="floorSwitchBtn" class="btn-floor-switch" onclick="switchFloorFromPopup()" data-i18n="popup.goUpstairs">
+                    Go Upstairs ↑
+                </button>
+            </div>
+            <div class="location-popup-actions">
+                <button class="btn-directions btn-directions-from" onclick="getDirectionsFromLocation()" data-i18n="popup.directionsFrom">
+                    Directions From
+                </button>
+                <button class="btn-directions btn-directions-to" onclick="getDirectionsToLocation()" data-i18n="popup.directionsTo">
+                    Directions To
+                </button>
+            </div>
+        </div>
+
+        <!-- Route Search Panel (Visible in Student View) -->
+        <div id="routePanel" class="route-panel">
+            <div class="route-header">
+                <span class="route-title" data-i18n="editor.pathfinder">Pathfinder</span>
+                <button class="route-panel-close-btn" onclick="collapseRoutePanel()" data-i18n-aria="a11y.closePathfinder" aria-label="Close pathfinder panel">×</button>
+            </div>
+            <div class="scale-notice" data-i18n="editor.scaleNotice">Note: Map is not drawn to scale</div>
+
+            <div class="route-inputs">
+                <div class="input-group">
+                    <label for="startLocation" data-i18n="editor.from">From:</label>
+                    <div class="autocomplete-container">
+                        <input type="text" id="startLocation" data-i18n-placeholder="editor.namePlaceholder" placeholder="Name or room #" autocomplete="off">
+                        <div id="startLocationDisplay" class="selected-display"></div>
+                        <div id="startSuggestions" class="suggestions-dropdown"></div>
+                    </div>
+                </div>
+
+                <button type="button" class="btn-swap-locations" onclick="swapLocations()" data-i18n-aria="a11y.swapLocations" aria-label="Swap start and end locations">
+                    <i data-lucide="arrow-down-up"></i>
+                </button>
+
+                <div class="input-group">
+                    <label for="endLocation" data-i18n="editor.to">To:</label>
+                    <div class="autocomplete-container">
+                        <input type="text" id="endLocation" data-i18n-placeholder="editor.namePlaceholder" placeholder="Name or room #" autocomplete="off">
+                        <div id="endLocationDisplay" class="selected-display"></div>
+                        <div id="endSuggestions" class="suggestions-dropdown"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="route-options">
+                <label class="elevator-toggle">
+                    <input type="checkbox" id="elevatorModeToggle" onchange="toggleElevatorMode(this.checked)" {% if elevator_access %}checked{% endif %}>
+                    <span class="elevator-toggle-label" data-i18n="editor.elevatorMode">Elevator Mode (avoid stairs)</span>
+                </label>
+            </div>
+
+            <div class="route-buttons">
+                <button id="findRouteBtn" onclick="findRoute()" class="btn-find-route" data-i18n="editor.findRoute">
+                    Find Route
+                </button>
+                <button id="clearRouteBtn" onclick="clearRoute()" class="btn-clear-route" data-i18n="common.clear">
+                    Clear
+                </button>
+            </div>
+
+            <div id="routeInfo" class="route-info" style="display: none;">
+                <div id="routeDistance"></div>
+                <div id="floorChangeInfo"></div>
+            </div>
+
+            <div id="routeError" class="route-error" style="display: none;"></div>
+
+            <!-- Quick Find Section -->
+            <div class="section-divider"></div>
+            <div class="category-filters">
+                <span class="category-label" data-i18n="editor.quickFind">Quick Find:</span>
+                <div class="category-buttons">
+                    <button type="button" class="category-btn" data-category="restrooms" onclick="filterByCategory('restrooms')" data-i18n-title="category.restrooms" title="Restrooms" aria-pressed="false">
+                        <i data-lucide="bath" aria-hidden="true"></i>
+                        <span class="category-btn-text" data-i18n="category.restrooms">Restrooms</span>
+                    </button>
+                    <button type="button" class="category-btn" data-category="classrooms" onclick="filterByCategory('classrooms')" data-i18n-title="category.classrooms" title="Classrooms" aria-pressed="false">
+                        <i data-lucide="school" aria-hidden="true"></i>
+                        <span class="category-btn-text" data-i18n="category.classrooms">Classrooms</span>
+                    </button>
+                    <button type="button" class="category-btn" data-category="stairs" onclick="filterByCategory('stairs')" data-i18n-title="category.stairs" title="Stairs" aria-pressed="false">
+                        <i data-lucide="footprints" aria-hidden="true"></i>
+                        <span class="category-btn-text" data-i18n="category.stairs">Stairs</span>
+                    </button>
+                    <button type="button" class="category-btn" data-category="elevators" onclick="filterByCategory('elevators')" data-i18n-title="category.elevators" title="Elevators" aria-pressed="false">
+                        <i data-lucide="arrow-up-down" aria-hidden="true"></i>
+                        <span class="category-btn-text" data-i18n="category.elevators">Elevators</span>
+                    </button>
+                    <button type="button" class="category-btn" data-category="exits" onclick="filterByCategory('exits')" data-i18n-title="category.exits" title="Exits" aria-pressed="false">
+                        <i data-lucide="door-open" aria-hidden="true"></i>
+                        <span class="category-btn-text" data-i18n="category.exits">Exits</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Room Finder Section -->
+            <div class="section-divider"></div>
+            <div class="room-finder-section">
+                <div class="room-finder-header">
+                    <span class="room-finder-title" data-i18n="editor.roomFinder">Room Finder</span>
+                </div>
+                <div class="room-finder-inputs">
+                    <div class="input-group">
+                        <label for="roomFinderInput" data-i18n="editor.findRoom">Find a room:</label>
+                        <div class="autocomplete-container">
+                            <input type="text" id="roomFinderInput" data-i18n-placeholder="editor.namePlaceholder" placeholder="Name or room #" autocomplete="off">
+                            <div id="roomFinderInputDisplay" class="selected-display"></div>
+                            <div id="roomFinderSuggestions" class="suggestions-dropdown"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="room-finder-buttons">
+                    <button id="findRoomBtn" onclick="findRoom()" class="btn-find-room" data-i18n="editor.find">
+                        Find
+                    </button>
+                    <button id="clearRoomBtn" onclick="clearFoundRoom()" class="btn-clear-room" data-i18n="common.clear">
+                        Clear
+                    </button>
+                </div>
+                <div id="roomFinderInfo" class="room-finder-info" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Desktop Pathfinder Tab - shows when panel is collapsed on desktop -->
+        <div id="routePanelTabDesktop" class="route-panel-tab-desktop" onclick="toggleRoutePanelDesktop()" role="button" tabindex="0" aria-label="Open pathfinder panel" aria-expanded="false" aria-controls="routePanel" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRoutePanelDesktop();}">
+            <span class="tab-icon" aria-hidden="true"><i data-lucide="compass"></i></span>
+            <span class="tab-text" data-i18n="editor.pathfinder">Pathfinder</span>
+        </div>
+    </main>
+
+    <!-- Control Panel -->
+    <aside id="controlPanel" class="control-panel" role="complementary" aria-label="Map editing controls">
+        <!-- Close button for mobile drawer -->
+        <button class="drawer-close-btn" onclick="toggleControlPanel()" data-i18n-aria="a11y.closeControlPanel" aria-label="Close control panel">×</button>
+        <div class="control-section">
+            <h3 data-i18n="editor.mode">Mode</h3>
+            <div class="mode-buttons">
+                <button id="panMode" class="mode-btn active" onclick="setMode('pan')">
+                    <i data-lucide="hand"></i> <span data-i18n="editor.pan">Pan</span>
+                </button>
+                <button id="drawMode" class="mode-btn" onclick="setMode('draw')"
+                        {% if 'edit_map' not in privileges %}disabled{% endif %}>
+                    <i data-lucide="pencil"></i> <span data-i18n="editor.draw">Draw</span>
+                </button>
+                <button id="textboxMode" class="mode-btn" onclick="setMode('textbox')"
+                        {% if 'edit_textboxes' not in privileges %}disabled{% endif %}>
+                    <i data-lucide="type"></i> <span data-i18n="editor.textbox">Textbox</span>
+                </button>
+                <button id="bucketMode" class="mode-btn" onclick="setMode('bucket')"
+                        {% if 'edit_map' not in privileges %}disabled{% endif %}>
+                    <i data-lucide="paint-bucket"></i> <span data-i18n="editor.bucket">Bucket</span>
+                </button>
+                <button id="infoMode" class="mode-btn" onclick="setMode('info')"
+                        {% if 'edit_textboxes' not in privileges %}disabled{% endif %}>
+                    <i data-lucide="info"></i> <span data-i18n="editor.infoPanel">Info Panel</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="tileColorSection" class="control-section">
+            <h3 data-i18n="editor.tileColor">Tile Color</h3>
+            <div class="tile-palette">
+                <button class="tile-btn" data-tile="0" style="background: #fff; color: #000;" onclick="selectTile(0)" data-i18n-title="tile.white" title="White - Eraser/Background">E</button>
+                <button class="tile-btn active" data-tile="1" style="background: #002a5d; color: #fff;" onclick="selectTile(1)" data-i18n-title="tile.navy" title="Navy - Walls">B</button>
+                <button class="tile-btn" data-tile="2" style="background: #fc5a1e; color: #fff;" onclick="selectTile(2)" data-i18n-title="tile.orange" title="Orange - Accent">O</button>
+                <button class="tile-btn" data-tile="3" style="background: #96bee6; color: #000;" onclick="selectTile(3)" data-i18n-title="tile.lightBlue" title="Light Blue - Hallways/Walkable">H</button>
+                <button class="tile-btn" data-tile="4" style="background: #000; color: #fff;" onclick="selectTile(4)" data-i18n-title="tile.black" title="Black - Walls">W</button>
+                <button class="tile-btn" data-tile="5" style="background: #000; color: #96bee6; border: 2px dashed #96bee6;" onclick="selectTile(5)" data-i18n-title="tile.doorway" title="Doorway - looks black but walkable">D</button>
+                <button class="tile-btn" data-tile="6" style="background: #96bee6; color: #002a5d; border: 2px dashed #002a5d;" onclick="selectTile(6)" data-i18n-title="tile.avoidZone" title="Avoid Zone - looks like hallway but pathfinder avoids">A</button>
+                <button class="tile-btn" data-tile="7" style="background: #E8F1F8; color: #000; border: 2px dashed #96bee6;" onclick="selectTile(7)" data-i18n-title="tile.sidewalk" title="Sidewalk - outdoor path (not walkable)">S</button>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h3 data-i18n="editor.actions">Actions</h3>
+            <div class="action-buttons">
+                <button onclick="zoomIn()" {% if 'zoom' not in privileges %}disabled{% endif %}><i data-lucide="zoom-in"></i> <span data-i18n="editor.zoomIn">Zoom In</span></button>
+                <button onclick="zoomOut()" {% if 'zoom' not in privileges %}disabled{% endif %}><i data-lucide="zoom-out"></i> <span data-i18n="editor.zoomOut">Zoom Out</span></button>
+                <button onclick="recenter()"><i data-lucide="crosshair"></i> <span data-i18n="editor.recenter">Recenter</span></button>
+                <button id="compassBtn" onclick="resetRotation()" data-i18n-title="editor.resetRotationTitle" title="Reset map rotation (A/D keys to rotate)"><i data-lucide="rotate-ccw"></i> <span data-i18n="editor.resetRotation">Reset Rotation</span></button>
+                <button onclick="undo()" {% if 'edit_map' not in privileges and 'edit_textboxes' not in privileges %}disabled{% endif %}><i data-lucide="undo"></i> <span data-i18n="editor.undo">Undo</span></button>
+                <button id="clearBtn" onclick="clearMap()" {% if 'clear' not in privileges %}disabled{% endif %}><i data-lucide="trash-2"></i> <span data-i18n="editor.clearMap">Clear</span></button>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h3 data-i18n="editor.file">File</h3>
+            <div class="action-buttons">
+                <button onclick="showSaveDialog()" {% if 'save' not in privileges %}disabled{% endif %}><i data-lucide="save"></i> <span data-i18n="editor.saveBtn">Save</span></button>
+                <button onclick="showLoadDialog()" {% if 'load' not in privileges %}disabled{% endif %}><i data-lucide="folder-open"></i> <span data-i18n="editor.loadBtn">Load</span></button>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h3 data-i18n="editor.info">Info</h3>
+            <div class="info-display">
+                <p><strong data-i18n="editor.zoom">Zoom:</strong> <span id="zoomLevel">8</span>px/tile</p>
+                <p><strong data-i18n="editor.position">Position:</strong> (<span id="posX">0</span>, <span id="posY">0</span>)</p>
+                <p><strong data-i18n="editor.modeLabel">Mode:</strong> <span id="currentMode">Pan</span></p>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Save Dialog -->
+    <div id="saveDialog" class="modal" role="dialog" aria-modal="true" aria-labelledby="saveDialogTitle">
+        <div class="modal-content">
+            <h2 id="saveDialogTitle" data-i18n="save.title">Save Map</h2>
+            <input type="text" id="saveFilename" data-i18n-placeholder="save.filenamePlaceholder" placeholder="Enter new filename...">
+
+            <!-- Existing files list -->
+            <div style="margin: 20px 0;">
+                <h3 style="font-size: 1rem; margin-bottom: 10px; color: #9ca3af;" data-i18n="save.overwriteExisting">Or overwrite existing file:</h3>
+                <div id="saveFileList" class="file-list" style="max-height: 200px;"></div>
+            </div>
+
+            <div class="modal-buttons">
+                <button onclick="saveMap()" class="btn-primary" data-i18n="common.save">Save</button>
+                <button onclick="closeModal('saveDialog')" data-i18n="common.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Dialog -->
+    <div id="loadDialog" class="modal" role="dialog" aria-modal="true" aria-labelledby="loadDialogTitle">
+        <div class="modal-content">
+            <h2 id="loadDialogTitle" data-i18n="load.title">Load Map</h2>
+            <div id="fileList" class="file-list"></div>
+            <div class="modal-buttons">
+                <button onclick="closeModal('loadDialog')" data-i18n="common.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Textbox Edit Dialog -->
+    <div id="textboxDialog" class="modal" role="dialog" aria-modal="true" aria-labelledby="textboxDialogTitle">
+        <div class="modal-content">
+            <h2 id="textboxDialogTitle" data-i18n="textbox.editTitle">Edit Textbox</h2>
+            <textarea id="textboxContent" rows="10"></textarea>
+            <div class="textbox-controls">
+                <label for="markerToggle" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="markerToggle" style="width: 18px; height: 18px; cursor: pointer;">
+                    <span data-i18n="textbox.markerLabel">Marker (transparent background)</span>
+                </label>
+                <label for="fontSizeSlider"><span data-i18n="textbox.fontSize">Font Size:</span> <span id="fontSizeDisplay">20</span>px</label>
+                <input type="range" id="fontSizeSlider" min="12" max="128" value="20" step="2" aria-describedby="fontSizeDisplay">
+                <label for="textAlign" data-i18n="textbox.horizontalAlign">Horizontal Alignment:</label>
+                <select id="textAlign">
+                    <option value="left" data-i18n="textbox.left">Left</option>
+                    <option value="center" data-i18n="textbox.center">Center</option>
+                    <option value="right" data-i18n="textbox.right">Right</option>
+                </select>
+                <label for="textVerticalAlign" data-i18n="textbox.verticalAlign">Vertical Alignment:</label>
+                <select id="textVerticalAlign">
+                    <option value="top" data-i18n="textbox.top">Top</option>
+                    <option value="middle" data-i18n="textbox.middle">Middle</option>
+                    <option value="bottom" data-i18n="textbox.bottom">Bottom</option>
+                </select>
+            </div>
+            <div class="modal-buttons">
+                <button onclick="saveTextbox()" class="btn-primary" data-i18n="common.ok">Ok</button>
+                <button onclick="deleteTextbox()" class="btn-danger" data-i18n="textbox.remove">Remove</button>
+                <button onclick="closeModal('textboxDialog')" data-i18n="common.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Panel Edit Dialog -->
+    <div id="infoPanelDialog" class="modal" role="dialog" aria-modal="true" aria-labelledby="infoPanelDialogTitle">
+        <div class="modal-content info-panel-modal">
+            <h2 id="infoPanelDialogTitle" data-i18n="infoPanel.editTitle">Edit Info Panel</h2>
+
+            <div class="info-panel-location-preview">
+                <span id="infoPanelLocationName">Location Name</span>
+            </div>
+
+            <div class="info-panel-section">
+                <label for="infoPanelDescription" data-i18n="infoPanel.description">Description:</label>
+                <textarea id="infoPanelDescription" rows="6" data-i18n-placeholder="infoPanel.descPlaceholder" placeholder="Enter a description for this location..." maxlength="1000"></textarea>
+                <div class="char-count"><span id="descriptionCharCount">0</span>/1000</div>
+            </div>
+
+            <div class="info-panel-section">
+                <label for="newImageUrl" data-i18n="infoPanel.images">Images (URLs):</label>
+                <div id="infoPanelImageList" class="image-list">
+                    <!-- Dynamically populated -->
+                </div>
+                <div class="image-add-row">
+                    <input type="url" id="newImageUrl" data-i18n-placeholder="infoPanel.addImagePlaceholder" placeholder="https://example.com/image.jpg">
+                    <button type="button" onclick="addInfoPanelImage()" class="btn-add-image" data-i18n="infoPanel.add">Add</button>
+                </div>
+            </div>
+
+            <div id="infoPanelImagePreview" class="image-preview">
+                <!-- Image thumbnails rendered here -->
+            </div>
+
+            <div class="info-panel-section" id="categoryChecklistSection">
+                <div class="category-checklist-header">
+                    <label data-i18n="infoPanel.categories">Categories:</label>
+                    <button type="button" id="resetCategoriesBtn" class="btn-reset-categories" onclick="resetCategoriesToAuto()" style="display: none;" data-i18n="infoPanel.resetToAuto">Reset to Auto</button>
+                </div>
+                <div id="categoryChecklist" class="category-checklist">
+                    <label class="category-checkbox-item">
+                        <input type="checkbox" value="restrooms" onchange="onCategoryCheckboxChanged()">
+                        <span data-i18n="category.restrooms">Restrooms</span>
+                        <span class="category-auto-badge" data-category="restrooms" style="display: none;" data-i18n="infoPanel.auto">(auto)</span>
+                    </label>
+                    <label class="category-checkbox-item">
+                        <input type="checkbox" value="classrooms" onchange="onCategoryCheckboxChanged()">
+                        <span data-i18n="category.classrooms">Classrooms</span>
+                        <span class="category-auto-badge" data-category="classrooms" style="display: none;" data-i18n="infoPanel.auto">(auto)</span>
+                    </label>
+                    <label class="category-checkbox-item">
+                        <input type="checkbox" value="stairs" onchange="onCategoryCheckboxChanged()">
+                        <span data-i18n="category.stairs">Stairs</span>
+                        <span class="category-auto-badge" data-category="stairs" style="display: none;" data-i18n="infoPanel.auto">(auto)</span>
+                    </label>
+                    <label class="category-checkbox-item">
+                        <input type="checkbox" value="elevators" onchange="onCategoryCheckboxChanged()">
+                        <span data-i18n="category.elevators">Elevators</span>
+                        <span class="category-auto-badge" data-category="elevators" style="display: none;" data-i18n="infoPanel.auto">(auto)</span>
+                    </label>
+                    <label class="category-checkbox-item">
+                        <input type="checkbox" value="exits" onchange="onCategoryCheckboxChanged()">
+                        <span data-i18n="category.exits">Exits</span>
+                        <span class="category-auto-badge" data-category="exits" style="display: none;" data-i18n="infoPanel.auto">(auto)</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="modal-buttons">
+                <button onclick="saveInfoPanel()" class="btn-primary" data-i18n="common.save">Save</button>
+                <button onclick="clearInfoPanel()" class="btn-danger" data-i18n="infoPanel.clearAll">Clear All</button>
+                <button onclick="closeModal('infoPanelDialog')" data-i18n="common.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification/Confirm Modal -->
+    <div id="notifyModal" class="modal notify-modal" role="alertdialog" aria-modal="true" aria-labelledby="notifyMessage">
+        <div class="modal-content notify-content">
+            <div id="notifyIcon" class="notify-icon" aria-hidden="true"></div>
+            <div id="notifyMessage" class="notify-message"></div>
+            <div id="notifyButtons" class="modal-buttons"></div>
+        </div>
+    </div>
+
+    <script>
+        // Pass privileges and elevator access to JavaScript
+        const userPrivileges = JSON.parse('{{ privileges | tojson | safe }}');
+        let elevatorAccessRequired = {{ 'true' if elevator_access else 'false' }};
+
+    </script>
+    <!-- Load translations first (deferred but ordered before other scripts) -->
+    <script src="{{ url_for('static', filename='translations.js') }}?v=104" defer></script>
+    <!-- Load core rendering engine (deferred scripts execute in order) -->
+    <script src="{{ url_for('static', filename='map_core.js') }}?v=104" defer></script>
+    <!-- Then load interactions/UI -->
+    <script src="{{ url_for('static', filename='map_interactions.js') }}?v=104" defer></script>
+    <script src="{{ url_for('static', filename='map_editor.js') }}?v=104" defer></script>
+    <!-- Pathfinder loads last with low priority - not needed until map is painted -->
+    <script src="{{ url_for('static', filename='map_pathfinder.js') }}?v=104" defer fetchpriority="low"></script>
+    <script src="{{ url_for('static', filename='map_pathfinder_ui.js') }}?v=104" defer fetchpriority="low"></script>
+    <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js" defer fetchpriority="low"></script>
+    <script defer>window.addEventListener('load', function() {
+        if (window.lucide) {
+            // Use idle callback to avoid blocking main thread with icon rendering
+            if (window.requestIdleCallback) {
+                requestIdleCallback(function() { lucide.createIcons(); });
+            } else {
+                setTimeout(function() { lucide.createIcons(); }, 0);
+            }
+        }
+    });</script>
+
+    <!-- Support Button & Popup -->
+    <button class="support-btn" onclick="toggleSupport()" data-i18n-title="common.support">?</button>
+    <div id="supportPopup" class="support-popup">
+        <div class="support-popup-header">
+            <h3 data-i18n="common.support">Support</h3>
+            <button class="support-close-btn" onclick="toggleSupport()">&times;</button>
+        </div>
+        <div class="support-popup-body">
+            <p data-i18n="common.supportQuestion">Have feedback, questions, comments, or recommendations? We'd love to hear from you!</p>
+            <a href="https://mail.google.com/mail/?view=cm&to=guidepost360.support@example.com&su=GuidePost360%20Feedback" target="_blank" rel="noopener noreferrer" class="support-email-link">
+                <span data-i18n="common.sendFeedback">Send Feedback</span>
+                <span class="support-email-address">guidepost360.support@example.com</span>
+            </a>
+        </div>
+    </div>
+
+    <script>
+        function toggleSupport() {
+            const popup = document.getElementById('supportPopup');
+            popup.classList.toggle('show');
+        }
+
+        // Close popup when clicking outside
+        document.addEventListener('click', function(e) {
+            const popup = document.getElementById('supportPopup');
+            const btn = document.querySelector('.support-btn');
+            if (popup && btn && !popup.contains(e.target) && !btn.contains(e.target)) {
+                popup.classList.remove('show');
+            }
+        });
+    </script>
+</body>
+</html>

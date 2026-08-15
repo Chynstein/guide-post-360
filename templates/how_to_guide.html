@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en" id="htmlRoot">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="How to use GuidePost360 - Campus navigation guide with step-by-step instructions.">
+    <title>How-To Guide - GuidePost360</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <!-- Preload fonts to eliminate render-blocking chain -->
+    <link rel="preload" href="{{ url_for('static', filename='fonts/inter-400.woff2') }}" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="{{ url_for('static', filename='fonts/inter-600.woff2') }}" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=103">
+    <style>
+        /* Guide-specific styles */
+        .guide-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .guide-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .guide-header h1 {
+            color: var(--text-primary);
+            margin-bottom: 10px;
+        }
+
+        .guide-header p {
+            color: var(--text-secondary);
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--wb-blue);
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-weight: 500;
+            padding: 10px 16px;
+            border: 2px solid var(--wb-orange);
+            border-radius: 8px;
+            background: var(--card-bg);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .back-link:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        /* Tab styles - browser-like */
+        .tabs-container {
+            background: var(--card-bg);
+            border-radius: 12px 12px 0 0;
+            padding: 10px 10px 0 10px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 10px 16px;
+            background: var(--btn-secondary-bg);
+            border: none;
+            border-radius: 10px 10px 0 0;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            transition: all 0.2s ease;
+            position: relative;
+            white-space: nowrap;
+        }
+
+        .tab:hover {
+            background: var(--btn-secondary-hover);
+        }
+
+        .tab.active {
+            background: var(--card-bg);
+            color: var(--text-primary);
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.05);
+        }
+
+        /* Tab content area */
+        .tab-content-container {
+            background: var(--card-bg);
+            border-radius: 0 12px 12px 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            min-height: 400px;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 30px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .tab-content h2 {
+            color: var(--text-primary);
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--wb-orange);
+        }
+
+        .tab-content h3 {
+            color: var(--text-primary);
+            margin-top: 25px;
+            margin-bottom: 12px;
+        }
+
+        .tab-content p {
+            color: var(--text-secondary);
+            line-height: 1.7;
+            margin-bottom: 15px;
+        }
+
+        .tab-content ul, .tab-content ol {
+            color: var(--text-secondary);
+            line-height: 1.8;
+            margin-bottom: 15px;
+            padding-left: 25px;
+        }
+
+        .tab-content li {
+            margin-bottom: 8px;
+        }
+
+        .tab-content strong {
+            color: var(--text-primary);
+        }
+
+        .tab-content kbd {
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        .tab-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 0.95em;
+        }
+
+        .tab-content th, .tab-content td {
+            border: 1px solid var(--border-color);
+            padding: 10px 12px;
+            text-align: left;
+        }
+
+        .tab-content th {
+            background: var(--card-bg);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .tab-content tr:nth-child(even) {
+            background: rgba(0,0,0,0.02);
+        }
+
+        .tab-content code {
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        .tab-content pre {
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px 15px;
+            overflow-x: auto;
+            font-family: monospace;
+            font-size: 0.9em;
+            line-height: 1.5;
+            margin: 15px 0;
+        }
+
+        .tab-content h4 {
+            color: var(--text-primary);
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        .tab-content hr {
+            border: none;
+            border-top: 1px solid var(--border-color);
+            margin: 25px 0;
+        }
+
+        .tab-content .note {
+            background: #fff8e6;
+            border-left: 4px solid var(--wb-orange);
+            padding: 12px 15px;
+            margin: 15px 0;
+            border-radius: 0 6px 6px 0;
+        }
+
+        /* Dark mode overrides - only for elements that need custom dark values */
+        [data-theme="dark"] .tab-content tr:nth-child(even) {
+            background: rgba(255,255,255,0.03);
+        }
+
+        [data-theme="dark"] .tab-content .note {
+            background: rgba(252, 90, 30, 0.1);
+        }
+
+        [data-theme="dark"] .tab-content a {
+            color: #6db3f2;
+        }
+
+        [data-theme="dark"] .back-link {
+            color: #6db3f2;
+        }
+
+        [data-theme="dark"] .guide-theme-toggle {
+            background: var(--card-bg);
+            color: var(--text-primary);
+        }
+
+        [data-theme="dark"] .guide-theme-toggle svg {
+            stroke: var(--text-primary);
+        }
+
+        /* Theme toggle */
+        .guide-theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--card-bg);
+            border: 2px solid var(--wb-orange);
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            cursor: pointer;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .guide-theme-toggle svg {
+            width: 1.3rem;
+            height: 1.3rem;
+        }
+
+        .guide-theme-toggle:hover {
+            box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+            background-color: var(--wb-orange);
+            color: white;
+        }
+
+        .guide-theme-toggle:hover svg {
+            stroke: white;
+        }
+
+        /* Language Toggle Button (bottom-left, mirrors support button style) */
+        .guide-lang-toggle {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background-color: var(--card-bg);
+            color: var(--text-primary);
+            border: 2px solid var(--wb-orange);
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .guide-lang-toggle:hover {
+            box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+            background-color: var(--wb-orange);
+            color: white;
+        }
+
+        /* Language content blocks */
+        .lang-es { display: none; }
+
+        /* Responsive tabs for mobile */
+        @media (max-width: 600px) {
+            .tabs {
+                gap: 3px;
+            }
+            .tab {
+                padding: 8px 10px;
+                font-size: 12px;
+            }
+            .tab-content {
+                padding: 20px 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen" role="status" aria-live="polite" aria-label="Loading">
+        <div class="loading-content">
+            <div class="loading-spinner" aria-hidden="true">
+                <svg viewBox="0 0 100 100">
+                    <defs>
+                        <linearGradient id="arrowGradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#FC5A1E;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#FF8C00;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M 44 6 A 46 46 0 0 1 94 56 L 98 51 L 94 56 L 89 54"
+                          fill="none" stroke="url(#arrowGradient1)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M 56 94 A 46 46 0 0 1 6 44 L 2 49 L 6 44 L 11 46"
+                          fill="none" stroke="url(#arrowGradient1)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <img src="{{ url_for('static', filename='guidepost_logo.svg') }}" alt="GuidePost360 Logo" class="loading-logo" fetchpriority="high">
+            <span class="loading-text">Loading...</span>
+        </div>
+    </div>
+
+    <!-- Theme Toggle Button -->
+    <button id="themeToggle" class="guide-theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark/light mode">
+        <i data-lucide="moon"></i>
+    </button>
+
+    <!-- Language Toggle Button -->
+    <button class="guide-lang-toggle" onclick="toggleLanguage()" aria-label="Cambiar a español" title="Español">ES</button>
+
+    <div class="guide-container">
+        <a href="{{ url_for('index') }}" class="back-link" data-i18n="guide.backLink">&#8592; Back to GuidePost360</a>
+
+        <div class="guide-header">
+            <h1 data-i18n="guide.title">GuidePost360 How-To Guide</h1>
+            <p data-i18n="guide.subtitle">Quick reference for navigating and using the campus map</p>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs-container">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('started', this)" data-i18n="guide.tabStarted">Getting Started</button>
+                <button class="tab" onclick="switchTab('navigating', this)" data-i18n="guide.tabNavigating">Navigating</button>
+                <button class="tab" onclick="switchTab('finding', this)" data-i18n="guide.tabFinding">Finding Rooms</button>
+                <button class="tab" onclick="switchTab('directions', this)" data-i18n="guide.tabDirections">Directions</button>
+                <button class="tab" onclick="switchTab('help', this)" data-i18n="guide.tabHelp">Help</button>
+            </div>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="tab-content-container">
+
+            <!-- ==================== GETTING STARTED ==================== -->
+            <div id="started-content" class="tab-content active">
+                <h2 data-i18n="guide.startedTitle">Getting Started</h2>
+
+                <h3 data-i18n="guide.signingIn">Signing In</h3>
+                <ol>
+                    <li data-i18n="guide.signInStep1">On the dashboard, click the <strong>Safety Personnel</strong> button</li>
+                    <li data-i18n="guide.signInStep2">You will be taken directly to the map</li>
+                </ol>
+                <div class="note" data-i18n="guide.signInTip"><strong>Tip:</strong> If you need elevator-accessible routes, check the <strong>"I need elevator access"</strong> box before signing in.</div>
+
+                <hr>
+
+                <h3 data-i18n="guide.firstTimeAgreement">First-Time Agreement</h3>
+                <p data-i18n="guide.firstTimeDesc">The first time you open the map in a browser session, a brief privacy notice will appear. Click <strong>I Agree</strong> to continue. This only appears once per session.</p>
+
+                <hr>
+
+                <h3 data-i18n="guide.pageControls">Page Controls</h3>
+                <table>
+                    <tr>
+                        <th data-i18n="guide.controlCol">Control</th>
+                        <th data-i18n="guide.locationCol">Location</th>
+                        <th data-i18n="guide.whatItDoesCol">What It Does</th>
+                    </tr>
+                    <tr>
+                        <td data-i18n="guide.themeToggleLabel"><i data-lucide="moon" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em"></i> / <i data-lucide="sun" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em"></i> Theme Toggle</td>
+                        <td data-i18n="guide.topRight">Top-right corner</td>
+                        <td data-i18n="guide.themeToggleDesc">Switch between light and dark mode (your preference is saved)</td>
+                    </tr>
+                    <tr>
+                        <td data-i18n="guide.langToggleLabel"><strong>ES</strong> Language Toggle</td>
+                        <td data-i18n="guide.bottomLeft">Bottom-left corner</td>
+                        <td data-i18n="guide.langToggleDesc">Switch the interface between English and Spanish</td>
+                    </tr>
+                    <tr>
+                        <td data-i18n="guide.supportLabel"><strong>?</strong> Support Button</td>
+                        <td data-i18n="guide.bottomRight">Bottom-right corner</td>
+                        <td data-i18n="guide.supportDesc">Send feedback, report bugs, or ask questions</td>
+                    </tr>
+                </table>
+
+                <hr>
+
+                <h3 data-i18n="guide.quickTips">Dashboard Quick Tips</h3>
+                <p data-i18n="guide.quickTipsDesc">The dashboard shows helpful tips before you sign in:</p>
+                <ul>
+                    <li data-i18n="guide.quickTipsDesktop"><strong>Desktop:</strong> Keyboard shortcuts and mouse controls</li>
+                    <li data-i18n="guide.quickTipsMobile"><strong>Mobile:</strong> Touch gestures and navigation tips</li>
+                </ul>
+            </div>
+
+            <!-- ==================== NAVIGATING THE MAP ==================== -->
+            <div id="navigating-content" class="tab-content">
+                <h2 data-i18n="guide.navTitle">Navigating the Map</h2>
+
+                <h3 data-i18n="guide.movingAround">Moving Around</h3>
+                <table>
+                    <tr>
+                        <th data-i18n="guide.actionCol">Action</th>
+                        <th data-i18n="guide.desktopCol">Desktop</th>
+                        <th data-i18n="guide.mobileCol">Mobile</th>
+                    </tr>
+                    <tr>
+                        <td data-i18n="guide.panMove">Pan / Move</td>
+                        <td data-i18n="guide.clickDrag">Click and drag</td>
+                        <td data-i18n="guide.touchDrag">Touch and drag</td>
+                    </tr>
+                    <tr>
+                        <td data-i18n="guide.zoomInOut">Zoom in/out</td>
+                        <td data-i18n="guide.scrollWheel">Scroll wheel or touchpad</td>
+                        <td data-i18n="guide.pinchZoom">Pinch to zoom</td>
+                    </tr>
+                    <tr>
+                        <td data-i18n="guide.rotateMap">Rotate map</td>
+                        <td data-i18n="guide.rotateKeys">Press <kbd>A</kbd> (left) or <kbd>D</kbd> (right)</td>
+                        <td data-i18n="guide.twoFingerRotate">Two-finger rotation</td>
+                    </tr>
+                    <tr>
+                        <td data-i18n="guide.resetRotation">Reset rotation</td>
+                        <td data-i18n="guide.resetRotationDesktop">Click <i data-lucide="rotate-ccw" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em"></i> Reset Rotation or press <kbd>R</kbd></td>
+                        <td data-i18n="guide.resetRotationMobile">Tap <i data-lucide="rotate-ccw" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em"></i> Reset Rotation</td>
+                    </tr>
+                    <tr>
+                        <td data-i18n="guide.recenterMap">Recenter map</td>
+                        <td data-i18n="guide.pressR">Press <kbd>R</kbd></td>
+                        <td data-i18n="guide.usePathfinderPanel">Use Pathfinder panel</td>
+                    </tr>
+                </table>
+
+                <hr>
+
+                <h3 data-i18n="guide.switchingBuildings">Switching Buildings &amp; Floors</h3>
+                <ul>
+                    <li data-i18n="guide.useDropdown">Use the <strong>dropdown menu</strong> in the top-left corner of the map</li>
+                    <li data-i18n="guide.clickToSeeAll">Click it to see all available buildings and floors</li>
+                    <li data-i18n="guide.selectLocation">Select the location you want to view</li>
+                </ul>
+                <p data-i18n="guide.alsoSwitchFloors">You can also switch floors by clicking a staircase or elevator on the map &mdash; see the <strong>Help</strong> tab for details on floor switching.</p>
+
+                <hr>
+
+                <h3 data-i18n="guide.keyboardShortcuts">Keyboard Shortcuts (Desktop Only)</h3>
+                <table>
+                    <tr>
+                        <th data-i18n="guide.keyCol">Key</th>
+                        <th data-i18n="guide.actionCol">Action</th>
+                    </tr>
+                    <tr>
+                        <td><kbd>R</kbd></td>
+                        <td data-i18n="guide.recenterTheMap">Recenter the map</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>A</kbd></td>
+                        <td data-i18n="guide.rotateLeft">Rotate map left</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>D</kbd></td>
+                        <td data-i18n="guide.rotateRight">Rotate map right</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- ==================== FINDING ROOMS ==================== -->
+            <div id="finding-content" class="tab-content">
+                <h2 data-i18n="guide.findTitle">Finding Rooms</h2>
+
+                <h3 data-i18n="guide.usingRoomFinder">Using Room Finder (Quick Search)</h3>
+                <ol>
+                    <li><span data-i18n="guide.openPathfinder">Open the <strong>Pathfinder panel</strong>:</span>
+                        <ul>
+                            <li data-i18n="guide.pathfinderMobile"><strong>Mobile:</strong> Swipe up from the bottom, or tap the <i data-lucide="compass" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em"></i> Pathfinder tab</li>
+                            <li data-i18n="guide.pathfinderDesktop"><strong>Desktop:</strong> Click the <i data-lucide="compass" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em"></i> Pathfinder tab on the left side</li>
+                        </ul>
+                    </li>
+                    <li data-i18n="guide.scrollToRoomFinder">Scroll down to the <strong>Room Finder</strong> section</li>
+                    <li data-i18n="guide.typeRoomSearch">Type a room number, location name, or related term</li>
+                    <li data-i18n="guide.selectSuggestion">Select from the suggestions that appear</li>
+                    <li data-i18n="guide.clickFind">Click <strong>Find</strong> &mdash; the map will zoom to that location and highlight it with a yellow star</li>
+                </ol>
+
+                <hr>
+
+                <h3 data-i18n="guide.tappingMap">Tapping on the Map</h3>
+                <p data-i18n="guide.tapRoomDesc">Click or tap any room label directly on the map to open an info panel popup showing:</p>
+                <ul>
+                    <li data-i18n="guide.infoRoomName"><strong>Room name</strong> and <strong>room number</strong></li>
+                    <li data-i18n="guide.infoFloor"><strong>Floor / building</strong> location</li>
+                    <li data-i18n="guide.infoDesc"><strong>Description</strong> (if one has been added)</li>
+                    <li data-i18n="guide.infoImages"><strong>Images</strong> (if any have been added)</li>
+                    <li data-i18n="guide.infoDirections"><strong>Directions From</strong> / <strong>Directions To</strong> buttons to quickly start navigation</li>
+                </ul>
+
+                <hr>
+
+                <h3 data-i18n="guide.searchTips">Search Tips</h3>
+                <ul>
+                    <li data-i18n="guide.searchByRoom">You can search by <strong>room number</strong> or <strong>location names</strong> (e.g., "bathroom", "cafeteria", "gym")</li>
+                    <li data-i18n="guide.searchAliases">Many locations have aliases &mdash; for example, searching "lunchroom" will find the Commons</li>
+                    <li data-i18n="guide.searchTryRelated">If you can't find something, try a related term</li>
+                </ul>
+            </div>
+
+            <!-- ==================== GETTING DIRECTIONS ==================== -->
+            <div id="directions-content" class="tab-content">
+                <h2 data-i18n="guide.dirTitle">Getting Directions</h2>
+
+                <h3 data-i18n="guide.usingPathfinder">Using the Pathfinder</h3>
+                <ol>
+                    <li><span data-i18n="guide.openPathfinder">Open the <strong>Pathfinder panel</strong>:</span>
+                        <ul>
+                            <li data-i18n="guide.pathfinderMobile"><strong>Mobile:</strong> Swipe up from the bottom, or tap the <i data-lucide="compass" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em"></i> Pathfinder tab</li>
+                            <li data-i18n="guide.pathfinderDesktop"><strong>Desktop:</strong> Click the <i data-lucide="compass" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em"></i> Pathfinder tab on the left side</li>
+                        </ul>
+                    </li>
+                    <li data-i18n="guide.fromField">In the <strong>From</strong> field, type your starting location</li>
+                    <li data-i18n="guide.toField">In the <strong>To</strong> field, type your destination</li>
+                    <li data-i18n="guide.clickFindRoute">Click <strong>Find Route</strong></li>
+                </ol>
+
+                <hr>
+
+                <h3 data-i18n="guide.readingRoute">Reading Your Route</h3>
+                <ul>
+                    <li data-i18n="guide.coloredPath">A <strong>colored path</strong> appears on the map showing your route with a <strong>green dot</strong> moving along the path to indicate movement direction</li>
+                    <li data-i18n="guide.perFloorInstructions"><strong>Per-floor instructions</strong> appear in the header bar at the top of the screen</li>
+                    <li data-i18n="guide.clickableSteps">Each step in the header bar is <strong>clickable</strong> &mdash; tap any step to jump back to it</li>
+                    <li data-i18n="guide.crossesFloors">If the route crosses floors, you'll see which stairs or elevator to use</li>
+                </ul>
+
+                <hr>
+
+                <h3 data-i18n="guide.quickDirections">Quick Directions from a Room</h3>
+                <p data-i18n="guide.quickDirectionsDesc">You can also start directions directly from any room's info panel popup:</p>
+                <ol>
+                    <li data-i18n="guide.tapForDirections">Tap a room label on the map to open the info panel</li>
+                    <li data-i18n="guide.clickDirFromTo">Click <strong>Directions From</strong> to set it as your starting point, or <strong>Directions To</strong> to set it as your destination</li>
+                    <li data-i18n="guide.fillOtherField">Fill in the other field and click <strong>Find Route</strong></li>
+                </ol>
+
+                <hr>
+
+                <h3 data-i18n="guide.elevatorMode">Elevator Mode</h3>
+                <p data-i18n="guide.avoidStairs">If you need to avoid stairs:</p>
+                <ol>
+                    <li data-i18n="guide.elevatorCheckbox">Check the <strong>"I need elevator access"</strong> box on the dashboard before signing in, OR</li>
+                    <li data-i18n="guide.elevatorToggle">Toggle <strong>Elevator Mode</strong> in the Pathfinder panel at any time</li>
+                </ol>
+                <p data-i18n="guide.elevatorModeDesc">When enabled, all routes will use elevators instead of stairs. If no elevator access is possible for a given route, a warning message will appear.</p>
+
+                <hr>
+
+                <h3 data-i18n="guide.routeTips">Route Tips</h3>
+                <ul>
+                    <li data-i18n="guide.clickClear">Click <strong>Clear</strong> to remove the current route and start over</li>
+                    <li data-i18n="guide.searchInFields">You can search by room number or common location names in both From and To fields</li>
+                </ul>
+            </div>
+
+            <!-- ==================== HELP & TROUBLESHOOTING ==================== -->
+            <div id="help-content" class="tab-content">
+                <h2 data-i18n="guide.helpTitle">Floor Switching &amp; Troubleshooting</h2>
+
+                <h3 data-i18n="guide.switchingStaircases">Switching Floors via Staircases</h3>
+                <p data-i18n="guide.clickStaircase">When you click on a staircase or elevator on the map:</p>
+                <ol>
+                    <li data-i18n="guide.infoPanelAppears">An info panel popup appears with floor information</li>
+                    <li data-i18n="guide.clickGoUpDown">Click the <strong>Go Upstairs</strong> or <strong>Go Downstairs</strong> button</li>
+                    <li data-i18n="guide.mapAutoSwitches">The map automatically switches to that floor and opens the corresponding staircase's info panel on the new floor</li>
+                </ol>
+                <div class="note" data-i18n="guide.switchFloorsTip"><strong>Tip:</strong> You can also switch buildings/floors at any time using the dropdown menu in the top-left corner.</div>
+
+                <hr>
+
+                <h3 data-i18n="guide.troubleshooting">Troubleshooting</h3>
+
+                <h4 data-i18n="guide.mapNotLoading">Map not loading?</h4>
+                <ul>
+                    <li data-i18n="guide.refreshPage">Refresh the page</li>
+                    <li data-i18n="guide.checkInternet">Make sure you're connected to the internet</li>
+                </ul>
+
+                <h4 data-i18n="guide.cantFindRoom">Can't find a room?</h4>
+                <ul>
+                    <li data-i18n="guide.tryRelatedTerm">Try searching by a related term (e.g., "gym" instead of "gymnasium")</li>
+                    <li data-i18n="guide.checkCorrectFloor">Check if you're looking on the correct building or floor</li>
+                </ul>
+
+                <h4 data-i18n="guide.routeNotShowing">Route not showing?</h4>
+                <ul>
+                    <li data-i18n="guide.bothFieldsFilled">Make sure both the From and To fields are filled in</li>
+                    <li data-i18n="guide.clearAndRetry">Clear the route and try again</li>
+                </ul>
+
+                <hr>
+
+                <h3 data-i18n="guide.gettingHelp">Getting Help</h3>
+                <ul>
+                    <li data-i18n="guide.clickSupport">Click the <strong>?</strong> button in the bottom-right corner of any page to contact support</li>
+                    <li data-i18n="guide.sendFeedbackHelp">You can send feedback, report bugs, or ask questions directly from there</li>
+                </ul>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Support Button & Popup -->
+    <button class="support-btn" onclick="toggleSupport()" data-i18n-title="common.support" title="Support">?</button>
+    <div id="supportPopup" class="support-popup">
+        <div class="support-popup-header">
+            <h3 data-i18n="common.support">Support</h3>
+            <button class="support-close-btn" onclick="toggleSupport()">&times;</button>
+        </div>
+        <div class="support-popup-body">
+            <p data-i18n="common.supportQuestion">Have feedback, questions, comments, or recommendations? We'd love to hear from you!</p>
+            <a href="https://mail.google.com/mail/?view=cm&to=guidepost360.support@example.com&su=GuidePost360%20Feedback" target="_blank" rel="noopener noreferrer" class="support-email-link">
+                <span data-i18n="common.sendFeedback">Send Feedback</span>
+                <span class="support-email-address">guidepost360.support@example.com</span>
+            </a>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+    <script src="{{ url_for('static', filename='translations.js') }}?v=103"></script>
+    <script>
+        // Tab switching — receives button element directly to avoid implicit event issues
+        function switchTab(tabName, btn) {
+            document.querySelectorAll('.tab').forEach(function(tab) { tab.classList.remove('active'); });
+            btn.classList.add('active');
+
+            document.querySelectorAll('.tab-content').forEach(function(content) { content.classList.remove('active'); });
+            document.getElementById(tabName + '-content').classList.add('active');
+        }
+
+        // Theme functionality
+        function initTheme() {
+            const stored = localStorage.getItem('loginTheme');
+            let theme;
+            if (stored && (stored === 'light' || stored === 'dark')) {
+                theme = stored;
+            } else {
+                theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.setAttribute('data-theme', theme);
+            updateThemeButton(theme);
+        }
+
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme') || 'light';
+            const newTheme = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('loginTheme', newTheme);
+            updateThemeButton(newTheme);
+        }
+
+        function updateThemeButton(theme) {
+            const btn = document.getElementById('themeToggle');
+            if (btn) {
+                btn.innerHTML = theme === 'dark' ? '<i data-lucide="sun"></i>' : '<i data-lucide="moon"></i>';
+                if (window.lucide) lucide.createIcons();
+            }
+        }
+
+        initTheme();
+
+        // Support popup toggle
+        function toggleSupport() {
+            const popup = document.getElementById('supportPopup');
+            popup.classList.toggle('show');
+        }
+
+        // Close support popup when clicking outside
+        document.addEventListener('click', function(e) {
+            const popup = document.getElementById('supportPopup');
+            const btn = document.querySelector('.support-btn');
+            if (popup && btn && !popup.contains(e.target) && !btn.contains(e.target)) {
+                popup.classList.remove('show');
+            }
+        });
+
+        // Hide loading screen when page is ready
+        function hideLoadingScreen() {
+            const loadingScreen = document.getElementById('loadingScreen');
+            if (loadingScreen) {
+                loadingScreen.classList.add('hidden');
+            }
+        }
+
+        // Initialize language and hide loading screen when DOM is ready
+        window.addEventListener('load', function() {
+            if (window.lucide) lucide.createIcons();
+            if (typeof initLanguage === 'function') initLanguage();
+            setTimeout(hideLoadingScreen, 500);
+        });
+    </script>
+</body>
+</html>

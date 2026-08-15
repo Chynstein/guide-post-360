@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en" id="htmlRoot">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="GuidePost360 - Campus navigation system with interactive maps, turn-by-turn directions, and room finding.">
+    <title>GuidePost360 Login</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <!-- Preload critical resources for THIS page -->
+    <link rel="preload" href="{{ url_for('static', filename='style.css') }}?v=103" as="style">
+    <link rel="preload" href="{{ url_for('static', filename='guidepost_logo.svg') }}" as="image" fetchpriority="high">
+
+    <!-- Prefetch static files for NEXT page (map editor) - downloads while user types credentials -->
+    <link rel="prefetch" href="{{ url_for('static', filename='map_editor.css') }}?v=103" as="style">
+    <link rel="prefetch" href="{{ url_for('static', filename='map_core.js') }}?v=103" as="script">
+    <link rel="prefetch" href="{{ url_for('static', filename='map_interactions.js') }}?v=103" as="script">
+    <link rel="prefetch" href="{{ url_for('static', filename='map_editor.js') }}?v=103" as="script">
+    <link rel="prefetch" href="{{ url_for('static', filename='map_pathfinder.js') }}?v=103" as="script">
+    <link rel="prefetch" href="{{ url_for('static', filename='map_pathfinder_ui.js') }}?v=103" as="script">
+
+    <!-- Preload fonts to eliminate render-blocking chain -->
+    <link rel="preload" href="{{ url_for('static', filename='fonts/inter-400.woff2') }}" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="{{ url_for('static', filename='fonts/inter-600.woff2') }}" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=103">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen" role="status" aria-live="polite" aria-label="Loading">
+        <div class="loading-content">
+            <div class="loading-spinner" aria-hidden="true">
+                <svg viewBox="0 0 100 100">
+                    <!-- Two curved arrows circling around clockwise -->
+                    <defs>
+                        <linearGradient id="arrowGradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#FC5A1E;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#FF8C00;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <!-- First arrow (top-right arc) with pointed end -->
+                    <path d="M 44 6 A 46 46 0 0 1 94 56 L 98 51 L 94 56 L 89 54"
+                          fill="none"
+                          stroke="url(#arrowGradient1)"
+                          stroke-width="5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"/>
+                    <!-- Second arrow (bottom-left arc) with pointed end -->
+                    <path d="M 56 94 A 46 46 0 0 1 6 44 L 2 49 L 6 44 L 11 46"
+                          fill="none"
+                          stroke="url(#arrowGradient1)"
+                          stroke-width="5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <img src="{{ url_for('static', filename='guidepost_logo.svg') }}" alt="GuidePost360 Logo" class="loading-logo" fetchpriority="high">
+            <span class="loading-text" data-i18n="common.loading">Loading...</span>
+        </div>
+    </div>
+
+    <!-- Theme Toggle Button -->
+    <button id="loginThemeToggle" class="login-theme-toggle" onclick="toggleLoginTheme()" aria-label="Toggle dark/light mode" data-i18n-title="dashboard.appearance">
+        <i data-lucide="moon"></i>
+    </button>
+
+    <!-- Language Toggle Button -->
+    <button class="login-lang-toggle" onclick="toggleLanguage()" aria-label="Cambiar a español" title="Español">ES</button>
+
+    <main class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1 data-i18n="dashboard.title">GuidePost360</h1>
+            <p class="subtitle" data-i18n="dashboard.subtitle">Campus Navigation System</p>
+        </div>
+
+        <div class="content">
+            <!-- Flash messages (auto-dismiss after 12 seconds) -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} auto-dismiss"><span class="alert-message" data-i18n-flash="{{ message }}">{{ message }}</span></div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- Role selection / Dashboard (initially visible) -->
+            <div id="role-selection" {% if show_admin_form %}style="display: none;"{% endif %}>
+                <h2 data-i18n="dashboard.signinQuestion">How are you signing in?</h2>
+                <div class="role-buttons">
+                    <button class="role-btn role-btn-admin" onclick="selectRole('Admin')">
+                        <span class="role-icon"><i data-lucide="lock"></i></span>
+                        <span class="role-label" data-i18n="dashboard.admin">Admin</span>
+                    </button>
+                    <form id="personnel-form" method="POST" action="{{ url_for('login') }}" style="display:contents;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="role" value="Personnel">
+                        <input type="hidden" id="personnel-elevator" name="elevator_access" value="0">
+                        <button type="submit" class="role-btn role-btn-personnel">
+                            <span class="role-icon"><i data-lucide="shield"></i></span>
+                            <span class="role-label" data-i18n="dashboard.personnel">Safety Personnel</span>
+                        </button>
+                    </form>
+                </div>
+                <div class="personnel-elevator-option">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="personnel-elevator-checkbox" onchange="document.getElementById('personnel-elevator').value = this.checked ? '1' : '0'">
+                        <span data-i18n="dashboard.elevatorCheckbox">I need elevator access (avoid stairs)</span>
+                    </label>
+                </div>
+
+                <!-- Feature Cards -->
+                <div class="dashboard-cards">
+                    <!-- Quick Tips Card -->
+                    <div class="dashboard-card tips-card">
+                        <div class="card-header">
+                            <span class="card-icon"><i data-lucide="lightbulb"></i></span>
+                            <h3 data-i18n="dashboard.quickTips">Quick Tips</h3>
+                        </div>
+                        <ul class="tips-list">
+                            <!-- Desktop-only tips -->
+                            <li class="desktop-only" data-i18n="dashboard.tipRecenter">Press <strong>R</strong> to recenter the map view</li>
+                            <li class="desktop-only" data-i18n="dashboard.tipRotate">Use <strong>A</strong> and <strong>D</strong> keys to rotate the map</li>
+                            <li class="desktop-only" data-i18n="dashboard.tipDirections">Click <strong>Get Directions</strong> for turn-by-turn navigation</li>
+                            <li class="desktop-only" data-i18n="dashboard.tipFloorDropdown">Use the <strong>floor dropdown</strong> to switch between buildings</li>
+                            <!-- Mobile-only tips -->
+                            <li class="mobile-only" data-i18n="dashboard.tipSwipeUp"><strong>Swipe up</strong> from the bottom for pathfinder</li>
+                            <li class="mobile-only" data-i18n="dashboard.tipTapDirections">Tap <strong>Get Directions</strong> for turn-by-turn navigation</li>
+                            <li class="mobile-only" data-i18n="dashboard.tipFloorDropdownMobile">Use the <strong>floor dropdown</strong> to switch buildings</li>
+                            <li class="mobile-only" data-i18n="dashboard.tipTapRoom">Tap any <strong>room label</strong> to see details</li>
+                        </ul>
+                    </div>
+
+                    <!-- Help & Resources Card -->
+                    <div class="dashboard-card help-card">
+                        <div class="card-header">
+                            <span class="card-icon"><i data-lucide="book-open"></i></span>
+                            <h3 data-i18n="dashboard.helpResources">Help & Resources</h3>
+                        </div>
+                        <p class="help-description" data-i18n="dashboard.helpDescription">New to GuidePost360? Check out our guide to get started.</p>
+                        <a href="{{ url_for('how_to_guide') }}" class="help-link">
+                            <span data-i18n="dashboard.viewGuide">View How-To Guide</span>
+                            <span class="link-arrow">&#8594;</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin login form (hidden initially) -->
+            <div id="admin-login" class="login-form" {% if show_admin_form %}style="display: block;"{% else %}style="display: none;"{% endif %}>
+                <h2 data-i18n="dashboard.adminLogin">Admin Login</h2>
+                <form method="POST" action="{{ url_for('login') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="role" value="Admin">
+
+                    <div class="form-group">
+                        <label for="username" data-i18n="dashboard.username">Username</label>
+                        <input type="text" id="username" name="username" data-i18n-placeholder="dashboard.usernamePlaceholder" placeholder="Enter your username" value="{{ form_data.get('username', '') if form_data else '' }}" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password" data-i18n="dashboard.password">Password</label>
+                        <input type="password" id="password" name="password" data-i18n-placeholder="dashboard.passwordPlaceholder" placeholder="Enter your password" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="staff-email" data-i18n="dashboard.email">Email</label>
+                        <input type="email" id="staff-email" name="staff_email" data-i18n-placeholder="dashboard.emailPlaceholder" placeholder="you@example.com" value="{{ form_data.get('staff_email', '') if form_data else '' }}" required>
+                    </div>
+
+                    <div class="form-group checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="elevator_access" value="1" {% if form_data and form_data.get('elevator_access') %}checked{% endif %}>
+                            <span data-i18n="dashboard.elevatorCheckbox">I need elevator access (avoid stairs)</span>
+                        </label>
+                    </div>
+
+                    <div class="form-buttons">
+                        <button type="button" class="btn btn-secondary" onclick="goBack()" data-i18n="common.back">Back</button>
+                        <button type="submit" class="btn btn-primary" data-i18n="dashboard.signIn">Sign In</button>
+                    </div>
+                </form>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Support Button & Popup -->
+    <button class="support-btn" onclick="toggleSupport()" data-i18n-title="common.support">?</button>
+    <div id="supportPopup" class="support-popup">
+        <div class="support-popup-header">
+            <h3 data-i18n="common.support">Support</h3>
+            <button class="support-close-btn" onclick="toggleSupport()">&times;</button>
+        </div>
+        <div class="support-popup-body">
+            <p data-i18n="common.supportQuestion">Have feedback, questions, comments, or recommendations? We'd love to hear from you!</p>
+            <a href="https://mail.google.com/mail/?view=cm&to=guidepost360.support@example.com&su=GuidePost360%20Feedback" target="_blank" rel="noopener noreferrer" class="support-email-link">
+                <span data-i18n="common.sendFeedback">Send Feedback</span>
+                <span class="support-email-address">guidepost360.support@example.com</span>
+            </a>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+    <script defer>window.addEventListener('load', function() { if (window.lucide) lucide.createIcons(); });</script>
+    <script src="{{ url_for('static', filename='translations.js') }}?v=103"></script>
+    <script src="{{ url_for('static', filename='script.js') }}?v=103"></script>
+    <script>
+        // Show loading screen immediately when login form is submitted
+        document.addEventListener('submit', function(e) {
+            if (e.target.tagName === 'FORM') {
+                const loadingScreen = document.getElementById('loadingScreen');
+                if (loadingScreen) {
+                    loadingScreen.classList.remove('hidden');
+                }
+            }
+        });
+
+        function toggleSupport() {
+            const popup = document.getElementById('supportPopup');
+            popup.classList.toggle('show');
+        }
+
+        // Close popup when clicking outside
+        document.addEventListener('click', function(e) {
+            const popup = document.getElementById('supportPopup');
+            const btn = document.querySelector('.support-btn');
+            if (!popup.contains(e.target) && !btn.contains(e.target)) {
+                popup.classList.remove('show');
+            }
+        });
+
+        // Theme toggle functionality
+        function initLoginTheme() {
+            const stored = localStorage.getItem('loginTheme');
+            let theme;
+            if (stored && (stored === 'light' || stored === 'dark')) {
+                theme = stored;
+            } else {
+                // Fall back to OS preference
+                theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.setAttribute('data-theme', theme);
+            updateLoginThemeButton(theme);
+        }
+
+        function toggleLoginTheme() {
+            const current = document.documentElement.getAttribute('data-theme') || 'light';
+            const newTheme = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('loginTheme', newTheme);
+            updateLoginThemeButton(newTheme);
+        }
+
+        function updateLoginThemeButton(theme) {
+            const btn = document.getElementById('loginThemeToggle');
+            if (btn) {
+                btn.innerHTML = theme === 'dark' ? '<i data-lucide="sun"></i>' : '<i data-lucide="moon"></i>';
+                if (window.lucide) lucide.createIcons();
+                btn.setAttribute('aria-label', theme === 'dark' ? t('dashboard.toggleLight') : t('dashboard.toggleDark'));
+                btn.setAttribute('title', theme === 'dark' ? t('dashboard.lightMode') : t('dashboard.darkMode'));
+            }
+        }
+
+        // Initialize theme on page load
+        initLoginTheme();
+
+        // Initialize language on page load
+        initLanguage();
+
+        // Hide loading screen when page is ready
+        function hideLoadingScreen() {
+            const loadingScreen = document.getElementById('loadingScreen');
+            if (loadingScreen) {
+                loadingScreen.classList.add('hidden');
+            }
+        }
+
+        // Hide loading screen when DOM is ready and after a minimum display time
+        window.addEventListener('load', function() {
+            setTimeout(hideLoadingScreen, 500);
+        });
+
+        // Auto-dismiss flash messages after 20 seconds
+        document.querySelectorAll('.alert.auto-dismiss').forEach(function(alert) {
+            setTimeout(function() {
+                alert.style.transition = 'opacity 0.5s ease-out';
+                alert.style.opacity = '0';
+                setTimeout(function() {
+                    alert.remove();
+                }, 500);
+            }, 20000);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local
+
+# Test artifacts
+coverage/
+htmlcov/
+.coverage
+*.cover
+.pytest_cache/
+.hypothesis/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# Test reports
+report.html
+*.xml
+
+# School branding (not version controlled)
+static/wb_logo.png
+
+# Map data (backups + live campus maps, not version controlled)
+maps/backups/
+maps/CTEDownstairs.json
+maps/CTEUpstairs.json
+maps/MainCampusDownstairs.json
+maps/MainCampusUpstairs.json
