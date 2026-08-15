@@ -75,6 +75,8 @@ def clear_failed_logins(ip_address):
 # Version query strings (?v=10) handle cache busting when files change
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000  # 1 year in seconds
 
+IS_PRODUCTION = os.environ.get('PRODUCTION', '').lower() == 'true'
+
 # Use environment variable for secret key, with fallback for development only
 # In production, set the SECRET_KEY environment variable!
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-only-key-change-in-production')
@@ -82,7 +84,7 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dev-only-key-change-in-production
 # Secure session cookie configuration
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access to session cookie
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
-app.config['SESSION_COOKIE_SECURE'] = os.environ.get('PRODUCTION', '').lower() == 'true'  # HTTPS only in production
+app.config['SESSION_COOKIE_SECURE'] = IS_PRODUCTION  # HTTPS only in production
 
 # Auto-reload templates when they change (no server restart needed)
 # Static files still use browser caching with version query strings for cache busting
@@ -132,6 +134,12 @@ USERS = {
         "privileges": ["edit_map", "edit_textboxes", "save", "load", "clear", "zoom", "fullscreen"]
     }
 }
+
+if IS_PRODUCTION and (app.secret_key == 'dev-only-key-change-in-production' or USERS['admin']['password'] == 'admin123'):
+    raise RuntimeError(
+        "Refusing to start with PRODUCTION=true while SECRET_KEY/ADMIN_PASSWORD are unset. "
+        "Set both environment variables before deploying."
+    )
 
 # Public Safety Personnel role (no login required - direct access)
 PERSONNEL_ROLE = {
